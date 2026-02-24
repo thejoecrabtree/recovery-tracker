@@ -8,21 +8,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Recovery Tracker</title>
-    <script type="module" crossorigin src="./assets/index-B7LMwx2-.js"></script>
+    <script type="module" crossorigin src="./assets/index-92Wuugux.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DPS0xahN.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <div id="root"></div>
     <script>
-      // One-time cache bust (v3.2) — force SW update for Whoop readiness card
-      if (!localStorage.getItem('cache-bust-v32')) {
+      // One-time cache bust (v3.3) — force SW update for Whoop fetch fix
+      if (!localStorage.getItem('cache-bust-v33')) {
         navigator.serviceWorker?.getRegistrations().then(function(regs) {
           regs.forEach(function(r) { r.unregister(); });
         });
         caches?.keys().then(function(keys) {
           keys.forEach(function(k) { caches.delete(k); });
         });
-        localStorage.setItem('cache-bust-v32', '1');
+        localStorage.setItem('cache-bust-v33', '1');
         setTimeout(function() { location.reload(); }, 500);
       }
     </script>
