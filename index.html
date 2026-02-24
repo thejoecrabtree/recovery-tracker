@@ -14,15 +14,15 @@
   <body>
     <div id="root"></div>
     <script>
-      // One-time cache bust (v3.1) — force SW update after scope fix
-      if (!localStorage.getItem('cache-bust-v31')) {
+      // One-time cache bust (v3.2) — force SW update for Whoop readiness card
+      if (!localStorage.getItem('cache-bust-v32')) {
         navigator.serviceWorker?.getRegistrations().then(function(regs) {
           regs.forEach(function(r) { r.unregister(); });
         });
         caches?.keys().then(function(keys) {
           keys.forEach(function(k) { caches.delete(k); });
         });
-        localStorage.setItem('cache-bust-v31', '1');
+        localStorage.setItem('cache-bust-v32', '1');
         setTimeout(function() { location.reload(); }, 500);
       }
     </script>
