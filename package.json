@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://jospehcrabtree.github.io/recovery-tracker",
+  "homepage": "https://thejoecrabtree.github.io/recovery-tracker",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
