@@ -8,21 +8,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Recovery Tracker</title>
-    <script type="module" crossorigin src="./assets/index-CryGwHY-.js"></script>
+    <script type="module" crossorigin src="./assets/index-D0JzVYjE.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-BMEnpICp.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <div id="root"></div>
     <script>
-      // One-time cache bust (v4.0) — force SW update for bar weight, interactive plates, video modal
-      if (!localStorage.getItem('cache-bust-v40')) {
+      // One-time cache bust (v4.1) — fix calendar/workout day alignment
+      if (!localStorage.getItem('cache-bust-v41')) {
         navigator.serviceWorker?.getRegistrations().then(function(regs) {
           regs.forEach(function(r) { r.unregister(); });
         });
         caches?.keys().then(function(keys) {
           keys.forEach(function(k) { caches.delete(k); });
         });
-        localStorage.setItem('cache-bust-v40', '1');
+        localStorage.setItem('cache-bust-v41', '1');
         setTimeout(function() { location.reload(); }, 500);
       }
     </script>
