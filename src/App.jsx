@@ -6,10 +6,13 @@ import DayDetailView from './components/DayDetailView';
 import CalendarView from './components/CalendarView';
 import ProgressView from './components/ProgressView';
 import SettingsView from './components/SettingsView';
+import WhoopCallback from './components/WhoopCallback';
 
 export default function App() {
   return (
     <Shell>
+      {/* Whoop OAuth callback handler — detects ?code= on redirect */}
+      <WhoopCallback />
       <Routes>
         <Route path="/" element={<TodayView />} />
         <Route path="/workout" element={<WorkoutView />} />

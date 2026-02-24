@@ -1,3 +1,5 @@
+import { displayWeight } from './units';
+
 const MAX_ADJUSTMENT = 15; // kg cap in either direction
 
 export function roundToPlate(kg) {
@@ -12,6 +14,15 @@ export function getEffective1RM(liftKey, baseMaxes, adjustments) {
 
 export function calcWeight(effective1RM, percentage) {
   return roundToPlate(effective1RM * percentage);
+}
+
+/**
+ * Calculate weight and return in display unit.
+ * Internal calc is always in kg, then converted for display.
+ */
+export function calcWeightDisplay(effective1RM, percentage, unit = 'kg') {
+  const kg = roundToPlate(effective1RM * percentage);
+  return displayWeight(kg, unit);
 }
 
 export function calcSetWeights(effective1RM, sets) {

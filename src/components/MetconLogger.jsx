@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import Timer from './Timer';
 
-export default function MetconLogger({ section, onComplete }) {
+export default function MetconLogger({ section, defaultVariant, onComplete }) {
   const { name, format, description, rx, scaled, timeSeconds, target } = section;
-  const [variant, setVariant] = useState('rx');
+  const [variant, setVariant] = useState(defaultVariant || 'rx');
   const [score, setScore] = useState('');
   const [timerDone, setTimerDone] = useState(false);
 
   const movements = variant === 'rx' ? rx : scaled;
 
   const handleComplete = () => {
-    onComplete?.({ variant, score, name });
+    onComplete?.({ variant, score, name, format });
   };
 
   return (

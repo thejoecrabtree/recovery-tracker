@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { PROGRAM } from '../data/program';
 import { toISODate, dateFromISO, getDateForProgramDay, dayName } from '../lib/dates';
+import { getWorkoutModifications } from '../lib/readiness';
 
 export default function CalendarView() {
   const { data } = useApp();
@@ -118,6 +119,8 @@ export default function CalendarView() {
           const isSelected = selectedDate && toISODate(date) === toISODate(selectedDate);
           const status = isCurrentMonth ? getDayStatus(date) : 'none';
 
+          const hasNotes = data.workoutNotes?.[toISODate(date)];
+
           return (
             <button
               key={i}
@@ -128,9 +131,12 @@ export default function CalendarView() {
                 ${isToday ? 'font-bold' : ''}`}
             >
               <span>{date.getDate()}</span>
-              {status !== 'none' && (
-                <div className={`w-1.5 h-1.5 rounded-full mt-0.5 ${STATUS_COLORS[status]}`} />
-              )}
+              <div className="flex items-center gap-0.5 mt-0.5">
+                {status !== 'none' && (
+                  <div className={`w-1.5 h-1.5 rounded-full ${STATUS_COLORS[status]}`} />
+                )}
+                {hasNotes && <span className="text-[7px] leading-none">📝</span>}
+              </div>
             </button>
           );
         })}
@@ -156,6 +162,26 @@ export default function CalendarView() {
               <span className="text-xs text-emerald-500 font-semibold">Completed</span>
             )}
           </div>
+
+          {/* Notes */}
+          {data.workoutNotes?.[selectedInfo.iso] && (
+            <div className="bg-slate-800/50 rounded-lg p-2">
+              <p className="text-xs text-slate-400">📝 {data.workoutNotes[selectedInfo.iso]}</p>
+            </div>
+          )}
+
+          {/* Readiness */}
+          {data.readiness?.[selectedInfo.iso] && (() => {
+            const r = data.readiness[selectedInfo.iso];
+            const mods = getWorkoutModifications(r.score);
+            return (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span>{mods.emoji}</span>
+                <span style={{ color: mods.color }}>{mods.label}</span>
+                <span className="text-slate-600">({r.score}/10)</span>
+              </div>
+            );
+          })()}
 
           {selectedInfo.dayData && !selectedInfo.dayData.isRestDay && (
             <>

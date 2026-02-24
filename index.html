@@ -11,6 +11,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // One-time cache bust (v4.0) — force SW update for bar weight, interactive plates, video modal
+      if (!localStorage.getItem('cache-bust-v40')) {
+        navigator.serviceWorker?.getRegistrations().then(function(regs) {
+          regs.forEach(function(r) { r.unregister(); });
+        });
+        caches?.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+        localStorage.setItem('cache-bust-v40', '1');
+        setTimeout(function() { location.reload(); }, 500);
+      }
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

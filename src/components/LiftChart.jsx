@@ -1,4 +1,12 @@
+import { useApp } from '../contexts/AppContext';
+import { displayWeight, unitLabel } from '../lib/units';
+
 export default function LiftChart({ liftKey, liftName, base1RM, adjustment, history }) {
+  const { data } = useApp();
+  const unit = data.unit || 'kg';
+  const ul = unitLabel(unit);
+  const dw = (kg) => displayWeight(kg, unit);
+
   const effective = base1RM + adjustment;
   const hasHistory = history.length > 0;
 
@@ -28,15 +36,15 @@ export default function LiftChart({ liftKey, liftName, base1RM, adjustment, hist
       <div className="flex justify-between items-center mb-3">
         <div>
           <h3 className="text-sm font-bold text-slate-200">{liftName}</h3>
-          <p className="text-xs text-slate-500">Base: {base1RM}kg</p>
+          <p className="text-xs text-slate-500">Base: {dw(base1RM)}{ul}</p>
         </div>
         <div className="text-right">
           <p className="text-lg font-bold" style={{ color: adjustment > 0 ? '#22c55e' : adjustment < 0 ? '#ef4444' : '#94a3b8' }}>
-            {effective}kg
+            {dw(effective)}{ul}
           </p>
           {adjustment !== 0 && (
             <p className="text-xs" style={{ color: adjustment > 0 ? '#22c55e' : '#ef4444' }}>
-              {adjustment > 0 ? '+' : ''}{adjustment}kg
+              {adjustment > 0 ? '+' : ''}{dw(adjustment)}{ul}
             </p>
           )}
         </div>
@@ -59,14 +67,14 @@ export default function LiftChart({ liftKey, liftName, base1RM, adjustment, hist
             <g key={i}>
               <circle cx={toX(i)} cy={toY(p.value)} r={4} fill={p.delta > 0 ? '#22c55e' : p.delta < 0 ? '#ef4444' : '#94a3b8'} />
               <text x={toX(i)} y={toY(p.value) - 8} textAnchor="middle" fontSize={8} fill="#94a3b8">
-                {p.value}
+                {dw(p.value)}
               </text>
             </g>
           ))}
 
           {/* Y axis labels */}
-          <text x={PAD - 4} y={PAD + 4} textAnchor="end" fontSize={8} fill="#475569">{maxVal}</text>
-          <text x={PAD - 4} y={H - PAD + 4} textAnchor="end" fontSize={8} fill="#475569">{minVal}</text>
+          <text x={PAD - 4} y={PAD + 4} textAnchor="end" fontSize={8} fill="#475569">{dw(maxVal)}</text>
+          <text x={PAD - 4} y={H - PAD + 4} textAnchor="end" fontSize={8} fill="#475569">{dw(minVal)}</text>
         </svg>
       ) : (
         <p className="text-xs text-slate-600 text-center py-4">No adjustments yet. Complete workouts and rate RPE to see changes.</p>
@@ -79,7 +87,7 @@ export default function LiftChart({ liftKey, liftName, base1RM, adjustment, hist
             <div key={i} className="flex justify-between text-[10px]">
               <span className="text-slate-500">Week {h.weekNumber} — RPE {h.rpe}</span>
               <span className={h.delta > 0 ? 'text-emerald-500' : 'text-red-400'}>
-                {h.delta > 0 ? '+' : ''}{h.delta}kg
+                {h.delta > 0 ? '+' : ''}{dw(h.delta)}{ul}
               </span>
             </div>
           ))}

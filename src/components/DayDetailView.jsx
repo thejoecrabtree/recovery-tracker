@@ -5,11 +5,18 @@ import { getPhaseForWeek } from '../data/phases';
 import { LIFTS } from '../data/exercises';
 import { getEffective1RM, calcSetWeights } from '../lib/weights';
 import { dayName, toISODate, getDateForProgramDay, formatDate } from '../lib/dates';
+import { displayWeight, unitLabel } from '../lib/units';
+import { MovementWithVideo } from './VideoLink';
+import { InlineNotes } from './WorkoutNotes';
+import PlateCalculator from './PlateCalculator';
 
 export default function DayDetailView() {
   const { weekNum, dayIdx } = useParams();
   const navigate = useNavigate();
-  const { data } = useApp();
+  const { data, update } = useApp();
+  const unit = data.unit || 'kg';
+  const ul = unitLabel(unit);
+  const dw = (kg) => displayWeight(kg, unit);
 
   const weekNumber = Number(weekNum);
   const dayIndex = Number(dayIdx);
@@ -22,6 +29,7 @@ export default function DayDetailView() {
     : null;
   const dateISO = dateForDay ? toISODate(dateForDay) : null;
   const log = dateISO ? data.workoutLogs[dateISO] : null;
+  const notes = dateISO ? data.workoutNotes?.[dateISO] : null;
 
   if (!dayData) {
     return (
@@ -40,13 +48,21 @@ export default function DayDetailView() {
         <BackButton navigate={navigate} />
         <DayHeader weekNumber={weekNumber} dayIndex={dayIndex} phase={phase} date={dateForDay} />
         <div className="mt-8 text-center">
-          <p className="text-4xl mb-4">🧘</p>
+          <p className="text-4xl mb-4">{'\u{1F9D8}'}</p>
           <h2 className="text-xl font-bold mb-2">Rest Day</h2>
           <p className="text-slate-400 text-sm">Recovery is part of the program. Foam roll, stretch, and do your foot rehab.</p>
         </div>
       </div>
     );
   }
+
+  const handleNotesChange = (newNotes) => {
+    if (!dateISO) return;
+    update(prev => ({
+      ...prev,
+      workoutNotes: { ...prev.workoutNotes, [dateISO]: newNotes },
+    }));
+  };
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -65,6 +81,15 @@ export default function DayDetailView() {
         </div>
       )}
 
+      {/* Notes (editable if workout was logged) */}
+      {(notes || log) && (
+        <InlineNotes
+          notes={notes}
+          onChange={handleNotesChange}
+          editable={!!log}
+        />
+      )}
+
       {/* Injury phase note */}
       <div className="bg-amber-950/20 border border-amber-900/30 rounded-xl p-3">
         <p className="text-xs text-amber-500">{phase.injuryNote}</p>
@@ -78,6 +103,9 @@ export default function DayDetailView() {
           weekNumber={weekNumber}
           data={data}
           logData={log?.sections?.[i]}
+          unit={unit}
+          ul={ul}
+          dw={dw}
         />
       ))}
 
@@ -131,7 +159,7 @@ const TYPE_LABELS = {
   rehab: { label: 'Rehab', color: 'text-emerald-400', bg: 'bg-emerald-950/20 border-emerald-900/30' },
 };
 
-function SectionDetail({ section, weekNumber, data, logData }) {
+function SectionDetail({ section, weekNumber, data, logData, unit, ul, dw }) {
   const typeStyle = TYPE_LABELS[section.type] || TYPE_LABELS.warmup;
 
   return (
@@ -144,7 +172,7 @@ function SectionDetail({ section, weekNumber, data, logData }) {
 
       {/* Strength section — show calculated weights */}
       {section.type === 'strength' && section.liftKey && section.sets?.length > 0 && (
-        <StrengthDetail section={section} weekNumber={weekNumber} data={data} logData={logData} />
+        <StrengthDetail section={section} weekNumber={weekNumber} data={data} logData={logData} unit={unit} ul={ul} dw={dw} />
       )}
 
       {/* Metcon section — show RX and Scaled */}
@@ -152,12 +180,12 @@ function SectionDetail({ section, weekNumber, data, logData }) {
         <MetconDetail section={section} logData={logData} />
       )}
 
-      {/* Warmup / Cooldown / Rehab — show movements */}
+      {/* Warmup / Cooldown / Rehab — show movements with video links */}
       {(section.type === 'warmup' || section.type === 'cooldown' || section.type === 'rehab') && (
         <div className="space-y-1">
           {section.duration && <p className="text-xs text-slate-500">{section.duration}</p>}
           {(section.movements || section.description || []).map((m, i) => (
-            <p key={i} className="text-sm text-slate-300">{m}</p>
+            <MovementWithVideo key={i} text={m} />
           ))}
         </div>
       )}
@@ -167,7 +195,7 @@ function SectionDetail({ section, weekNumber, data, logData }) {
         <div className="space-y-1">
           {section.scheme && <p className="text-xs text-slate-400 font-medium">{section.scheme}</p>}
           {(section.movements || []).map((m, i) => (
-            <p key={i} className="text-sm text-slate-300">{m}</p>
+            <MovementWithVideo key={i} text={m} />
           ))}
         </div>
       )}
@@ -187,7 +215,7 @@ function SectionDetail({ section, weekNumber, data, logData }) {
   );
 }
 
-function StrengthDetail({ section, weekNumber, data, logData }) {
+function StrengthDetail({ section, weekNumber, data, logData, unit, ul, dw }) {
   const lift = LIFTS[section.liftKey];
   const effective1RM = getEffective1RM(section.liftKey, data.baseMaxes, data.adjustments);
   const calculated = calcSetWeights(effective1RM, section.sets);
@@ -197,11 +225,14 @@ function StrengthDetail({ section, weekNumber, data, logData }) {
   const uniqueWeights = [...new Set(weights)];
   const isBuildUp = uniqueWeights.length > 1;
 
+  // Show plate calculator for the heaviest weight
+  const heaviestWeight = Math.max(...weights);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-400">{section.scheme}</p>
-        <p className="text-xs text-slate-500">{lift?.name} — {effective1RM}kg 1RM</p>
+        <p className="text-xs text-slate-500">{lift?.name} — {dw(effective1RM)}{ul} 1RM</p>
       </div>
 
       {section.notes && <p className="text-xs text-slate-500 italic">{section.notes}</p>}
@@ -213,9 +244,9 @@ function StrengthDetail({ section, weekNumber, data, logData }) {
           <div className="flex flex-wrap gap-2">
             {calculated.map((s, i) => (
               <div key={i} className="flex items-center gap-1">
-                <span className="text-sm font-mono font-bold text-slate-100">{s.targetWeight}kg</span>
+                <span className="text-sm font-mono font-bold text-slate-100">{dw(s.targetWeight)}{ul}</span>
                 <span className="text-[10px] text-slate-600">x{s.reps}</span>
-                {i < calculated.length - 1 && <span className="text-slate-700 mx-0.5">→</span>}
+                {i < calculated.length - 1 && <span className="text-slate-700 mx-0.5">{'\u{2192}'}</span>}
               </div>
             ))}
           </div>
@@ -223,11 +254,14 @@ function StrengthDetail({ section, weekNumber, data, logData }) {
       ) : (
         <div className="bg-slate-800/50 rounded-lg p-3">
           <p className="text-sm font-mono font-bold text-slate-100">
-            {section.sets.length} x {section.sets[0]?.reps} @ {weights[0]}kg
+            {section.sets.length} x {section.sets[0]?.reps} @ {dw(weights[0])}{ul}
             <span className="text-[10px] text-slate-500 font-normal ml-2">({Math.round(section.sets[0]?.pct * 100)}%)</span>
           </p>
         </div>
       )}
+
+      {/* Plate loading for heaviest set */}
+      <PlateCalculator weight={dw(heaviestWeight)} unit={unit} />
 
       {/* Show logged sets if available */}
       {logData?.sets && (
@@ -236,7 +270,7 @@ function StrengthDetail({ section, weekNumber, data, logData }) {
           {logData.sets.map((s, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
               <span className="text-slate-500">Set {i + 1}:</span>
-              <span className="text-slate-200 font-mono">{s.weight}kg x {s.reps}</span>
+              <span className="text-slate-200 font-mono">{dw(s.weight)}{ul} x {s.reps}</span>
             </div>
           ))}
         </div>

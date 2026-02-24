@@ -5,13 +5,21 @@ import { PROGRAM } from '../data/program';
 import { getPhaseForWeek } from '../data/phases';
 import { getProgramDay, toISODate, dayName, getDateForProgramDay } from '../lib/dates';
 import { calculateRPEAdjustment, applyAdjustment } from '../lib/weights';
+import { displayWeight, unitLabel } from '../lib/units';
+import { getWorkoutModifications } from '../lib/readiness';
+import { checkForNewPRs } from '../lib/records';
 import StrengthLogger from './StrengthLogger';
 import MetconLogger from './MetconLogger';
+import WorkoutNotes from './WorkoutNotes';
+import { MovementWithVideo } from './VideoLink';
 
 export default function WorkoutView() {
   const { weekNum, dayIdx } = useParams();
   const { data, update } = useApp();
   const navigate = useNavigate();
+  const unit = data.unit || 'kg';
+  const ul = unitLabel(unit);
+  const dw = (kg) => displayWeight(kg, unit);
 
   // Determine which workout to show
   const { weekNumber, dayIndex } = useMemo(() => {
@@ -29,11 +37,17 @@ export default function WorkoutView() {
 
   const dateISO = data.startDate ? toISODate(getDateForProgramDay(data.startDate, weekNumber, dayIndex)) : toISODate(new Date());
 
+  // Readiness modifications
+  const todayReadiness = data.readiness?.[dateISO];
+  const readinessMods = todayReadiness ? getWorkoutModifications(todayReadiness.score) : null;
+
   // Section completion state
   const [completedSections, setCompletedSections] = useState({});
   const [sectionData, setSectionData] = useState({});
   const [activeSection, setActiveSection] = useState(0);
   const [adjustmentMessages, setAdjustmentMessages] = useState([]);
+  const [newPRs, setNewPRs] = useState([]);
+  const [showNotes, setShowNotes] = useState(false);
 
   if (!dayData || dayData.isRestDay) {
     return (
@@ -47,7 +61,12 @@ export default function WorkoutView() {
     );
   }
 
-  const sections = dayData.sections;
+  // Filter sections based on readiness
+  const isActiveRecovery = readinessMods?.activeRecoveryOnly;
+  const sections = isActiveRecovery
+    ? dayData.sections.filter(s => s.type === 'warmup' || s.type === 'cooldown' || s.type === 'rehab')
+    : dayData.sections;
+  const skippedTypes = isActiveRecovery ? ['strength', 'metcon', 'accessory'] : [];
   const totalSections = sections.length;
   const completedCount = Object.keys(completedSections).length;
   const allComplete = completedCount === totalSections;
@@ -76,6 +95,32 @@ export default function WorkoutView() {
           }],
         }));
       }
+
+      // Check for new PRs
+      const prs = checkForNewPRs(data.personalRecords, sData);
+      if (prs.length > 0) {
+        setNewPRs(prev => [...prev, ...prs]);
+      }
+    }
+
+    // Save metcon scores
+    if (sData?.name && sData?.score) {
+      update(prev => {
+        const scores = prev.metconScores || {};
+        const existing = scores[sData.name] || [];
+        return {
+          ...prev,
+          metconScores: {
+            ...scores,
+            [sData.name]: [...existing, {
+              date: dateISO,
+              score: sData.score,
+              variant: sData.variant,
+              format: sData.format,
+            }],
+          },
+        };
+      });
     }
 
     // Auto-advance to next section
@@ -84,7 +129,19 @@ export default function WorkoutView() {
     }
   };
 
-  const saveWorkout = () => {
+  const saveWorkout = (notes) => {
+    // Save PRs
+    const updatedPRs = { ...data.personalRecords };
+    for (const pr of newPRs) {
+      if (!updatedPRs[pr.liftKey]) updatedPRs[pr.liftKey] = {};
+      updatedPRs[pr.liftKey][`${pr.reps}rm`] = {
+        weight: pr.weight,
+        reps: pr.reps,
+        date: dateISO,
+        weekNumber,
+      };
+    }
+
     update(prev => ({
       ...prev,
       workoutLogs: {
@@ -97,12 +154,24 @@ export default function WorkoutView() {
           sections: sectionData,
         },
       },
+      personalRecords: updatedPRs,
+      workoutNotes: notes
+        ? { ...prev.workoutNotes, [dateISO]: notes }
+        : prev.workoutNotes,
     }));
     navigate('/');
   };
 
   return (
     <div className="p-4 pb-24 space-y-4">
+      {/* Notes modal */}
+      {showNotes && (
+        <WorkoutNotes
+          onSave={(notes) => saveWorkout(notes)}
+          onSkip={() => saveWorkout(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -114,6 +183,26 @@ export default function WorkoutView() {
         </span>
       </div>
 
+      {/* Readiness banner with intensity badge */}
+      {readinessMods && readinessMods.label !== 'Normal' && (
+        <div className="rounded-xl p-3 border" style={{ backgroundColor: readinessMods.color + '11', borderColor: readinessMods.color + '33' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{readinessMods.emoji}</span>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold" style={{ color: readinessMods.color }}>{readinessMods.label}</p>
+                {readinessMods.intensityPct < 100 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: readinessMods.color + '22', color: readinessMods.color }}>
+                    {readinessMods.intensityPct}% intensity
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">{readinessMods.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Progress dots */}
       <div className="flex gap-1.5">
         {sections.map((_, i) => (
@@ -124,12 +213,32 @@ export default function WorkoutView() {
         ))}
       </div>
 
+      {/* New PR banners */}
+      {newPRs.map((pr, i) => (
+        <div key={i} className="bg-amber-950/30 border border-amber-800/30 rounded-lg p-3 flex items-center gap-2">
+          <span className="text-lg">🎉</span>
+          <p className="text-xs text-amber-400 font-semibold">
+            New PR! {dw(pr.weight)}{ul} x {pr.reps} on {pr.liftKey.replace(/([A-Z])/g, ' $1').trim()}
+          </p>
+        </div>
+      ))}
+
       {/* Adjustment messages */}
       {adjustmentMessages.map((msg, i) => (
         <div key={i} className="bg-blue-950/30 border border-blue-800/30 rounded-lg p-3">
           <p className="text-xs text-blue-400">{msg}</p>
         </div>
       ))}
+
+      {/* Active Recovery: show what was removed */}
+      {isActiveRecovery && (
+        <div className="rounded-xl p-3 border border-red-900/30 bg-red-950/10">
+          <p className="text-xs text-red-400 font-medium mb-1">{readinessMods.emoji} Active Recovery Mode</p>
+          <p className="text-[10px] text-slate-500">
+            Skipped: {dayData.sections.filter(s => skippedTypes.includes(s.type)).map(s => s.title || s.name || s.type).join(', ')}
+          </p>
+        </div>
+      )}
 
       {/* Sections */}
       {sections.map((section, i) => (
@@ -154,6 +263,12 @@ export default function WorkoutView() {
               <span className={`text-sm font-semibold ${completedSections[i] ? 'text-emerald-400' : 'text-slate-200'}`}>
                 {section.title || section.name || section.type}
               </span>
+              {/* Intensity badge on strength/accessory sections */}
+              {readinessMods?.intensityPct < 100 && (section.type === 'strength' || section.type === 'accessory') && !completedSections[i] && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: readinessMods.color + '22', color: readinessMods.color }}>
+                  {readinessMods.intensityPct}%
+                </span>
+              )}
             </div>
             <span className="text-[10px] text-slate-600 uppercase">{section.type}</span>
           </button>
@@ -165,6 +280,7 @@ export default function WorkoutView() {
                 <StrengthLogger
                   section={section}
                   weekNumber={weekNumber}
+                  readinessMods={readinessMods}
                   onComplete={(sData) => markComplete(i, sData)}
                 />
               )}
@@ -172,6 +288,7 @@ export default function WorkoutView() {
               {section.type === 'metcon' && (
                 <MetconLogger
                   section={section}
+                  defaultVariant={readinessMods?.metconScale}
                   onComplete={(sData) => markComplete(i, sData)}
                 />
               )}
@@ -181,7 +298,7 @@ export default function WorkoutView() {
                   {section.duration && <p className="text-xs text-slate-500">{section.duration}</p>}
                   <div className="bg-slate-800 rounded-lg p-3 space-y-1">
                     {(section.movements || section.description || []).map((m, j) => (
-                      <p key={j} className="text-sm text-slate-300">{m}</p>
+                      <MovementWithVideo key={j} text={m} />
                     ))}
                   </div>
                   <button
@@ -195,18 +312,35 @@ export default function WorkoutView() {
 
               {section.type === 'accessory' && (
                 <div className="space-y-3">
+                  {readinessMods?.skipAccessory && (
+                    <div className="rounded-lg p-2 border border-orange-900/30 bg-orange-950/20">
+                      <p className="text-[10px] text-orange-400 font-medium">{readinessMods.emoji} Accessory work optional — skip or reduce sets</p>
+                    </div>
+                  )}
                   <p className="text-xs text-slate-400">{section.scheme}</p>
-                  <div className="bg-slate-800 rounded-lg p-3 space-y-1">
+                  <div className={`bg-slate-800 rounded-lg p-3 space-y-1 ${readinessMods?.skipAccessory ? 'opacity-50' : ''}`}>
                     {(section.movements || []).map((m, j) => (
-                      <p key={j} className="text-sm text-slate-300">{m}</p>
+                      <div key={j} className={readinessMods?.skipAccessory ? 'line-through decoration-slate-600' : ''}>
+                        <MovementWithVideo text={m} />
+                      </div>
                     ))}
                   </div>
-                  <button
-                    onClick={() => markComplete(i)}
-                    className="w-full py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold active:bg-slate-600"
-                  >
-                    Done
-                  </button>
+                  <div className="flex gap-2">
+                    {readinessMods?.skipAccessory && (
+                      <button
+                        onClick={() => markComplete(i)}
+                        className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl font-semibold active:bg-slate-700 border border-slate-700"
+                      >
+                        Skip
+                      </button>
+                    )}
+                    <button
+                      onClick={() => markComplete(i)}
+                      className={`${readinessMods?.skipAccessory ? 'flex-1' : 'w-full'} py-3 bg-slate-700 text-slate-200 rounded-xl font-semibold active:bg-slate-600`}
+                    >
+                      Done
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -217,7 +351,7 @@ export default function WorkoutView() {
       {/* Complete workout button */}
       {allComplete && (
         <button
-          onClick={saveWorkout}
+          onClick={() => setShowNotes(true)}
           className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg active:bg-emerald-700"
         >
           Complete Workout

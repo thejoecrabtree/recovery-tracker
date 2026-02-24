@@ -1,8 +1,14 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { PROGRAM } from '../data/program';
 import { getPhaseForWeek } from '../data/phases';
 import { getProgramDay, formatDate, toISODate, dayName } from '../lib/dates';
+import { getWorkoutModifications } from '../lib/readiness';
+import ReadinessCheck from './ReadinessCheck';
+import WhoopReadiness from './WhoopReadiness';
+import StreakBadge from './StreakBadge';
+import WeeklySummary from './WeeklySummary';
 
 const SECTION_ICONS = {
   warmup: 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z',
@@ -18,6 +24,10 @@ export default function TodayView() {
   const navigate = useNavigate();
   const today = new Date();
   const todayISO = toISODate(today);
+  const [showReadiness, setShowReadiness] = useState(false);
+
+  const todayReadiness = data.readiness?.[todayISO];
+  const readinessMods = todayReadiness ? getWorkoutModifications(todayReadiness.score) : null;
 
   if (!data.startDate) {
     return (
@@ -60,20 +70,66 @@ export default function TodayView() {
 
   if (!dayData || dayData.isRestDay) {
     return (
-      <div className="p-6">
+      <div className="p-4 space-y-4">
         <Header weekNumber={weekNumber} dayIndex={dayIndex} phase={phase} today={today} />
-        <div className="mt-12 text-center">
-          <p className="text-4xl mb-4">🧘</p>
+        <StreakBadge />
+        <div className="mt-4 text-center">
+          <p className="text-4xl mb-4">{'\u{1F9D8}'}</p>
           <h2 className="text-xl font-bold mb-2">Rest Day</h2>
           <p className="text-slate-400">Recovery is part of the program. Foam roll, stretch, and do your foot rehab if scheduled.</p>
         </div>
+        <WeeklySummary />
       </div>
     );
   }
 
   return (
     <div className="p-4 space-y-4">
+      {/* Manual readiness check-in modal (only when Whoop is NOT connected) */}
+      {showReadiness && !data.whoop?.accessToken && (
+        <ReadinessCheck
+          onComplete={() => setShowReadiness(false)}
+          onSkip={() => setShowReadiness(false)}
+        />
+      )}
+
       <Header weekNumber={weekNumber} dayIndex={dayIndex} phase={phase} today={today} />
+
+      {/* Streak badge */}
+      <StreakBadge />
+
+      {/* Readiness: Whoop auto-card OR manual check-in */}
+      {data.whoop?.accessToken ? (
+        <WhoopReadiness />
+      ) : todayReadiness ? (
+        <button
+          onClick={() => setShowReadiness(true)}
+          className="w-full rounded-xl p-3 border text-left"
+          style={{ backgroundColor: readinessMods.color + '11', borderColor: readinessMods.color + '33' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{readinessMods.emoji}</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold" style={{ color: readinessMods.color }}>{readinessMods.label}</p>
+              <p className="text-[10px] text-slate-500">Readiness: {todayReadiness.score}/10 &middot; Tap to update</p>
+            </div>
+          </div>
+        </button>
+      ) : !logged && (
+        <button
+          onClick={() => setShowReadiness(true)}
+          className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3 active:bg-slate-800"
+        >
+          <span className="text-lg">{'\u{1F4AD}'}</span>
+          <div className="text-left flex-1">
+            <p className="text-sm text-slate-300 font-medium">How are you feeling?</p>
+            <p className="text-[10px] text-slate-500">Quick readiness check adjusts your workout</p>
+          </div>
+          <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
 
       {logged && (
         <div className="bg-emerald-950/30 border border-emerald-800/30 rounded-xl p-3 flex items-center gap-2">
@@ -81,6 +137,16 @@ export default function TodayView() {
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
           </svg>
           <span className="text-sm text-emerald-400 font-medium">Workout logged today</span>
+        </div>
+      )}
+
+      {/* Notes for today */}
+      {data.workoutNotes?.[todayISO] && (
+        <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-3">
+          <div className="flex items-start gap-2">
+            <span className="text-sm">{'\u{1F4DD}'}</span>
+            <p className="text-sm text-slate-400">{data.workoutNotes[todayISO]}</p>
+          </div>
         </div>
       )}
 
@@ -103,6 +169,9 @@ export default function TodayView() {
       <div className="bg-amber-950/20 border border-amber-900/30 rounded-xl p-3">
         <p className="text-xs text-amber-500">{phase.injuryNote}</p>
       </div>
+
+      {/* Weekly summary card */}
+      <WeeklySummary />
 
       <button
         onClick={() => navigate(`/workout/${weekNumber}/${dayIndex}`)}

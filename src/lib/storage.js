@@ -1,8 +1,10 @@
 const STORAGE_KEY = 'recovery-tracker-data';
 
 const DEFAULT_DATA = {
-  version: 1,
+  version: 4,
   startDate: null,
+  barWeight: 20, // kg — men's Olympic bar. Women's = 15
+  unit: 'kg', // 'kg' or 'lbs' — display preference
   baseMaxes: {
     backSquat: 120,
     deadlift: 120,
@@ -23,14 +25,65 @@ const DEFAULT_DATA = {
   },
   adjustmentHistory: [],
   workoutLogs: {},
+  bodyWeight: [],
+  workoutNotes: {},
+  personalRecords: {},
+  readiness: {},
+  metconScores: {},  // { [metconName]: [{ date, score, variant, format }] }
+  restTimerDefaults: { strength: 120, accessory: 60 },
+  whoop: { accessToken: null, refreshToken: null, expiresAt: null, userId: null },
 };
+
+function migrateData(data) {
+  let d = { ...data };
+
+  // V1 → V2 migration
+  if (!d.version || d.version < 2) {
+    d = {
+      ...DEFAULT_DATA,
+      ...d,
+      version: 2,
+      bodyWeight: d.bodyWeight || [],
+      workoutNotes: d.workoutNotes || {},
+      personalRecords: d.personalRecords || {},
+      readiness: d.readiness || {},
+      restTimerDefaults: d.restTimerDefaults || { strength: 120, accessory: 60 },
+      whoop: d.whoop || { accessToken: null, refreshToken: null, expiresAt: null, userId: null },
+    };
+  }
+
+  // V2 → V3 migration: add unit preference and metcon scores
+  if (d.version < 3) {
+    d = {
+      ...d,
+      version: 3,
+      unit: d.unit || 'kg',
+      metconScores: d.metconScores || {},
+    };
+  }
+
+  // V3 → V4 migration: add bar weight setting
+  if (d.version < 4) {
+    d = {
+      ...d,
+      version: 4,
+      barWeight: d.barWeight || 20,
+    };
+  }
+
+  return d;
+}
 
 export function getData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_DATA };
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_DATA, ...parsed };
+    const migrated = migrateData(parsed);
+    if (parsed.version !== migrated.version) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    }
+    return migrated;
   } catch {
     return { ...DEFAULT_DATA };
   }
@@ -70,8 +123,9 @@ export function importData(file) {
       try {
         const data = JSON.parse(e.target.result);
         if (data.version && data.baseMaxes) {
-          setData(data);
-          resolve(data);
+          const migrated = migrateData(data);
+          setData(migrated);
+          resolve(migrated);
         } else {
           reject(new Error('Invalid backup file'));
         }
