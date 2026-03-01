@@ -4,6 +4,7 @@ import { LIFTS } from '../data/exercises';
 import { exportData, importData } from '../lib/storage';
 import { getAuthUrl, setProxyUrl, getProxyUrl, isProxyConfigured } from '../lib/whoop';
 import { displayWeight, unitLabel, getIncrement } from '../lib/units';
+import { isNotificationSupported, getNotificationPermission, requestNotificationPermission } from '../lib/notifications';
 import BodyWeightCard from './BodyWeightCard';
 
 export default function SettingsView() {
@@ -288,6 +289,9 @@ export default function SettingsView() {
         )}
       </div>
 
+      {/* Notifications */}
+      <NotificationSettings data={data} update={update} />
+
       {/* Export / Import */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
         <h2 className="text-sm font-semibold text-slate-300">Data</h2>
@@ -338,7 +342,73 @@ export default function SettingsView() {
         )}
       </div>
 
-      <p className="text-xs text-center text-slate-700 pb-4">Recovery Tracker v3.0</p>
+      <p className="text-xs text-center text-slate-700 pb-4">Recovery Tracker v5.0</p>
+    </div>
+  );
+}
+
+function NotificationSettings({ data, update }) {
+  const [permStatus, setPermStatus] = useState(() => getNotificationPermission());
+  const enabled = data.notifications?.enabled || false;
+
+  if (!isNotificationSupported()) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-300">Notifications</h2>
+        <p className="text-xs text-slate-500">Notifications are not supported in this browser.</p>
+      </div>
+    );
+  }
+
+  const handleToggle = async () => {
+    if (!enabled) {
+      // Turning on — request permission if needed
+      if (permStatus === 'default') {
+        const result = await requestNotificationPermission();
+        setPermStatus(result);
+        if (result !== 'granted') return;
+      } else if (permStatus === 'denied') {
+        return; // Can't enable if denied
+      }
+      update(prev => ({
+        ...prev,
+        notifications: { ...prev.notifications, enabled: true },
+      }));
+    } else {
+      // Turning off
+      update(prev => ({
+        ...prev,
+        notifications: { ...prev.notifications, enabled: false },
+      }));
+    }
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+      <h2 className="text-sm font-semibold text-slate-300">Workout Reminders</h2>
+      <p className="text-xs text-slate-500">Get a reminder when you open the app on workout days</p>
+
+      <button
+        onClick={handleToggle}
+        className={`w-full py-3 rounded-lg font-semibold text-sm ${
+          enabled && permStatus === 'granted'
+            ? 'bg-emerald-600 text-white'
+            : 'bg-slate-800 text-slate-400'
+        }`}
+      >
+        {permStatus === 'denied'
+          ? 'Notifications Blocked — Enable in Browser Settings'
+          : enabled && permStatus === 'granted'
+            ? 'Reminders On'
+            : 'Enable Reminders'
+        }
+      </button>
+
+      {permStatus === 'denied' && (
+        <p className="text-[10px] text-amber-500">
+          Notifications were denied. Open your browser/phone settings to allow notifications for this site.
+        </p>
+      )}
     </div>
   );
 }

@@ -12,15 +12,15 @@
   <body>
     <div id="root"></div>
     <script>
-      // One-time cache bust (v5.0) — AI Coach, workout flow, Whoop persistence
-      if (!localStorage.getItem('cache-bust-v50')) {
+      // One-time cache bust (v6.0) — PR board, body weight, notifications
+      if (!localStorage.getItem('cache-bust-v60')) {
         navigator.serviceWorker?.getRegistrations().then(function(regs) {
           regs.forEach(function(r) { r.unregister(); });
         });
         caches?.keys().then(function(keys) {
           keys.forEach(function(k) { caches.delete(k); });
         });
-        localStorage.setItem('cache-bust-v50', '1');
+        localStorage.setItem('cache-bust-v60', '1');
         setTimeout(function() { location.reload(); }, 500);
       }
     </script>

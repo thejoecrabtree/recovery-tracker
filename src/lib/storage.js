@@ -1,10 +1,11 @@
 const STORAGE_KEY = 'recovery-tracker-data';
 
 const DEFAULT_DATA = {
-  version: 4,
+  version: 5,
   startDate: null,
   barWeight: 20, // kg — men's Olympic bar. Women's = 15
   unit: 'kg', // 'kg' or 'lbs' — display preference
+  notifications: { enabled: false, lastNotifiedDate: null },
   baseMaxes: {
     backSquat: 120,
     deadlift: 120,
@@ -68,6 +69,15 @@ function migrateData(data) {
       ...d,
       version: 4,
       barWeight: d.barWeight || 20,
+    };
+  }
+
+  // V4 → V5 migration: add notification preferences
+  if (d.version < 5) {
+    d = {
+      ...d,
+      version: 5,
+      notifications: d.notifications || { enabled: false, lastNotifiedDate: null },
     };
   }
 

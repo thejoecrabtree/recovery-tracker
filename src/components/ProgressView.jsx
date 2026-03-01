@@ -86,10 +86,20 @@ function TrendsTab({ data, unit }) {
     return entries.reverse();
   }, [data.readiness]);
 
-  // Recent body weight
-  const recentWeight = useMemo(() => {
-    return (data.bodyWeight || []).slice(-14);
+  // All body weight entries (show up to 30)
+  const allWeight = useMemo(() => {
+    return (data.bodyWeight || []).slice(-30);
   }, [data.bodyWeight]);
+
+  // 7-day moving average
+  const movingAvg = useMemo(() => {
+    if (allWeight.length < 2) return [];
+    return allWeight.map((_, i) => {
+      const window = allWeight.slice(Math.max(0, i - 6), i + 1);
+      const avg = window.reduce((sum, e) => sum + e.kg, 0) / window.length;
+      return avg;
+    });
+  }, [allWeight]);
 
   return (
     <div className="space-y-4">
@@ -126,57 +136,130 @@ function TrendsTab({ data, unit }) {
         )}
       </div>
 
-      {/* Body weight trend */}
+      {/* Body weight trend — enhanced */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
         <h3 className="text-sm font-bold text-slate-200">Body Weight</h3>
-        {recentWeight.length >= 2 ? (
+        {allWeight.length >= 2 ? (
           <>
-            <MiniChart
-              data={recentWeight.map(e => displayWeightExact(e.kg, unit))}
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
+                <p className="text-sm font-bold text-slate-200">{displayWeightExact(allWeight[allWeight.length - 1].kg, unit)}</p>
+                <p className="text-[9px] text-slate-500">Current ({ul})</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-blue-400">
+                  {movingAvg.length > 0 ? displayWeightExact(movingAvg[movingAvg.length - 1], unit) : '--'}
+                </p>
+                <p className="text-[9px] text-slate-500">7d Avg ({ul})</p>
+              </div>
+              <div className="text-center">
+                {(() => {
+                  const delta = allWeight[allWeight.length - 1].kg - allWeight[0].kg;
+                  const sign = delta > 0 ? '+' : '';
+                  return (
+                    <p className={`text-sm font-bold ${delta > 0 ? 'text-amber-400' : delta < 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {sign}{displayWeightExact(delta, unit)}
+                    </p>
+                  );
+                })()}
+                <p className="text-[9px] text-slate-500">Change ({ul})</p>
+              </div>
+            </div>
+
+            {/* Chart with trend line */}
+            <BodyWeightChart
+              entries={allWeight}
+              movingAvg={movingAvg}
+              unit={unit}
             />
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Start: {displayWeightExact(recentWeight[0].kg, unit)}{ul}</span>
-              <span>Now: {displayWeightExact(recentWeight[recentWeight.length - 1].kg, unit)}{ul}</span>
-              <span className={recentWeight[recentWeight.length - 1].kg - recentWeight[0].kg > 0 ? 'text-amber-400' : 'text-emerald-400'}>
-                {displayWeightExact(recentWeight[recentWeight.length - 1].kg - recentWeight[0].kg, unit)}{ul}
-              </span>
+
+            {/* Date range */}
+            <div className="flex justify-between text-[9px] text-slate-600">
+              <span>{formatShortDate(allWeight[0].date)}</span>
+              <span>{allWeight.length} entries</span>
+              <span>{formatShortDate(allWeight[allWeight.length - 1].date)}</span>
             </div>
           </>
+        ) : allWeight.length === 1 ? (
+          <div className="text-center py-4">
+            <p className="text-lg font-bold text-slate-200">{displayWeightExact(allWeight[0].kg, unit)}{ul}</p>
+            <p className="text-xs text-slate-500 mt-1">Log more entries to see trends</p>
+          </div>
         ) : (
-          <p className="text-xs text-slate-600 text-center py-4">Log body weight in Settings to see trends.</p>
+          <p className="text-xs text-slate-600 text-center py-4">Log body weight on the Today tab or in Settings.</p>
         )}
       </div>
     </div>
   );
 }
 
-function MiniChart({ data }) {
-  const W = 300, H = 60, PAD = 5;
-  const min = Math.min(...data) - 0.5;
-  const max = Math.max(...data) + 0.5;
+function formatShortDate(dateStr) {
+  return new Date(dateStr + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function BodyWeightChart({ entries, movingAvg, unit }) {
+  const W = 300, H = 80, PAD = 8;
+  const values = entries.map(e => displayWeightExact(e.kg, unit));
+  const avgValues = movingAvg.map(kg => displayWeightExact(kg, unit));
+
+  const allVals = [...values, ...avgValues];
+  const min = Math.min(...allVals) - 0.5;
+  const max = Math.max(...allVals) + 0.5;
   const range = max - min || 1;
 
-  const points = data.map((v, i) => {
-    const x = PAD + (i / (data.length - 1)) * (W - PAD * 2);
+  const toPoint = (v, i) => {
+    const x = PAD + (i / Math.max(values.length - 1, 1)) * (W - PAD * 2);
     const y = PAD + (1 - (v - min) / range) * (H - PAD * 2);
-    return `${x},${y}`;
-  });
+    return { x, y };
+  };
+
+  const dataPoints = values.map((v, i) => toPoint(v, i));
+  const avgPoints = avgValues.map((v, i) => toPoint(v, i));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: '60px' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: '80px' }}>
+      {/* Fill under main line */}
+      <polygon
+        points={`${dataPoints.map(p => `${p.x},${p.y}`).join(' ')} ${dataPoints[dataPoints.length - 1].x},${H - PAD} ${PAD},${H - PAD}`}
+        fill="#22c55e"
+        opacity={0.08}
+      />
+      {/* Main data line */}
       <polyline
-        points={points.join(' ')}
+        points={dataPoints.map(p => `${p.x},${p.y}`).join(' ')}
         fill="none"
         stroke="#22c55e"
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {data.map((v, i) => {
-        const x = PAD + (i / (data.length - 1)) * (W - PAD * 2);
-        const y = PAD + (1 - (v - min) / range) * (H - PAD * 2);
-        return <circle key={i} cx={x} cy={y} r={2} fill="#22c55e" />;
-      })}
+      {/* 7-day moving average line */}
+      {avgPoints.length > 1 && (
+        <polyline
+          points={avgPoints.map(p => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={1.5}
+          strokeDasharray="4 2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.7}
+        />
+      )}
+      {/* Data points */}
+      {dataPoints.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={1.5} fill="#22c55e" />
+      ))}
+      {/* Last point highlighted */}
+      <circle
+        cx={dataPoints[dataPoints.length - 1].x}
+        cy={dataPoints[dataPoints.length - 1].y}
+        r={3}
+        fill="#22c55e"
+        stroke="#0f172a"
+        strokeWidth={1.5}
+      />
     </svg>
   );
 }

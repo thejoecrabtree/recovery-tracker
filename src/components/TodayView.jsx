@@ -5,6 +5,7 @@ import { PROGRAM } from '../data/program';
 import { getPhaseForWeek } from '../data/phases';
 import { getProgramDay, formatDate, toISODate, dayName } from '../lib/dates';
 import { getWorkoutModifications } from '../lib/readiness';
+import { displayWeightExact, unitLabel, bodyWeightStep, inputToKg } from '../lib/units';
 import ReadinessCheck from './ReadinessCheck';
 import WhoopReadiness from './WhoopReadiness';
 import StreakBadge from './StreakBadge';
@@ -21,12 +22,13 @@ const SECTION_ICONS = {
 };
 
 export default function TodayView() {
-  const { data } = useApp();
+  const { data, update } = useApp();
   const navigate = useNavigate();
   const today = new Date();
   const todayISO = toISODate(today);
   const [showReadiness, setShowReadiness] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
+  const [bwInput, setBwInput] = useState('');
 
   const todayReadiness = data.readiness?.[todayISO];
   const readinessMods = todayReadiness ? getWorkoutModifications(todayReadiness.score) : null;
@@ -152,6 +154,15 @@ export default function TodayView() {
         </div>
       )}
 
+      {/* Quick body weight log */}
+      <QuickBodyWeight
+        data={data}
+        update={update}
+        todayISO={todayISO}
+        bwInput={bwInput}
+        setBwInput={setBwInput}
+      />
+
       <div className="bg-slate-900 rounded-xl p-4 space-y-3 border border-slate-800">
         <h2 className="text-lg font-bold">{dayData.label}</h2>
 
@@ -192,6 +203,64 @@ export default function TodayView() {
           {logged ? 'View Workout' : 'Start Workout'}
         </button>
       </div>
+    </div>
+  );
+}
+
+function QuickBodyWeight({ data, update, todayISO, bwInput, setBwInput }) {
+  const unit = data.unit || 'kg';
+  const ul = unitLabel(unit);
+  const step = bodyWeightStep(unit);
+  const todayEntry = data.bodyWeight?.find(e => e.date === todayISO);
+
+  if (todayEntry) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center gap-2">
+        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+        </svg>
+        <span className="text-xs text-slate-500">Today:</span>
+        <span className="text-sm font-bold text-slate-200">{displayWeightExact(todayEntry.kg, unit)}{ul}</span>
+      </div>
+    );
+  }
+
+  const logWeight = () => {
+    const val = parseFloat(bwInput);
+    if (isNaN(val) || val <= 0) return;
+    const kg = unit === 'lbs' ? inputToKg(val, 'lbs') : val;
+    update(prev => {
+      const existing = prev.bodyWeight || [];
+      const filtered = existing.filter(e => e.date !== todayISO);
+      return {
+        ...prev,
+        bodyWeight: [...filtered, { date: todayISO, kg }].sort((a, b) => a.date.localeCompare(b.date)),
+      };
+    });
+    setBwInput('');
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 flex items-center gap-2">
+      <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+      </svg>
+      <input
+        type="number"
+        value={bwInput}
+        onChange={e => setBwInput(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && logWeight()}
+        placeholder={`Body weight (${ul})`}
+        step={step}
+        className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600 focus:outline-none min-w-0"
+      />
+      <button
+        onClick={logWeight}
+        disabled={!bwInput}
+        className="text-xs text-emerald-500 font-semibold active:text-emerald-300 disabled:opacity-30 shrink-0"
+      >
+        Log
+      </button>
     </div>
   );
 }

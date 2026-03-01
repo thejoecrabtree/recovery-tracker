@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { getData, setData, resetData as resetStorage } from '../lib/storage';
 import { isTokenExpired, refreshAccessToken } from '../lib/whoop';
+import { showWorkoutReminder } from '../lib/notifications';
+import { getProgramDay, toISODate } from '../lib/dates';
+import { PROGRAM } from '../data/program';
 
 const AppContext = createContext(null);
 
@@ -46,6 +49,36 @@ export function AppProvider({ children }) {
         console.warn('[Whoop] Proactive token refresh failed:', err.message);
         // Don't clear tokens — WhoopReadiness will handle retry/error display
       });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Workout day notification on app load
+  useEffect(() => {
+    if (!data.notifications?.enabled) return;
+    if (!data.startDate) return;
+
+    const todayISO = toISODate(new Date());
+    const lastNotified = data.notifications?.lastNotifiedDate;
+    if (lastNotified === todayISO) return;
+
+    const prog = getProgramDay(data.startDate);
+    if (!prog?.started || prog.finished) return;
+
+    const weekData = PROGRAM.weeks[prog.weekNumber - 1];
+    const dayData = weekData?.days?.[prog.dayIndex];
+    if (!dayData || dayData.isRestDay) return;
+
+    // It's a workout day — send notification after a short delay
+    const timer = setTimeout(() => {
+      const sent = showWorkoutReminder(dayData.label, todayISO, lastNotified);
+      if (sent) {
+        update(prev => ({
+          ...prev,
+          notifications: { ...prev.notifications, lastNotifiedDate: todayISO },
+        }));
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

@@ -68,3 +68,48 @@ export function estimated1RM(weight, reps) {
   if (reps === 1) return weight;
   return Math.round(weight * (1 + reps / 30) * 2) / 2; // round to 0.5
 }
+
+/**
+ * Compute best estimated 1RM across all rep ranges for each lift.
+ */
+export function getBestEstimated1RM(prs) {
+  if (!prs) return null;
+  let best = null;
+  for (const pr of Object.values(prs)) {
+    const est = estimated1RM(pr.weight, pr.reps);
+    if (!best || est > best.estimated) {
+      best = { estimated: est, weight: pr.weight, reps: pr.reps, date: pr.date, weekNumber: pr.weekNumber };
+    }
+  }
+  return best;
+}
+
+/**
+ * Compute volume records per lift from workout logs.
+ * Returns { [liftKey]: { totalVolume, sets, date, weekNumber } }
+ */
+export function detectVolumeRecords(workoutLogs) {
+  const records = {};
+
+  for (const [date, log] of Object.entries(workoutLogs)) {
+    if (!log.sections) continue;
+    for (const section of Object.values(log.sections)) {
+      if (!section.liftKey || !section.sets) continue;
+      const { liftKey } = section;
+
+      const totalVolume = section.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
+      const setCount = section.sets.length;
+
+      if (totalVolume > 0 && (!records[liftKey] || totalVolume > records[liftKey].totalVolume)) {
+        records[liftKey] = {
+          totalVolume,
+          sets: setCount,
+          date,
+          weekNumber: log.weekNumber,
+        };
+      }
+    }
+  }
+
+  return records;
+}
