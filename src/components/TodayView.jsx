@@ -9,6 +9,7 @@ import ReadinessCheck from './ReadinessCheck';
 import WhoopReadiness from './WhoopReadiness';
 import StreakBadge from './StreakBadge';
 import WeeklySummary from './WeeklySummary';
+import WorkoutCoach from './WorkoutCoach';
 
 const SECTION_ICONS = {
   warmup: 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z',
@@ -25,6 +26,7 @@ export default function TodayView() {
   const today = new Date();
   const todayISO = toISODate(today);
   const [showReadiness, setShowReadiness] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
 
   const todayReadiness = data.readiness?.[todayISO];
   const readinessMods = todayReadiness ? getWorkoutModifications(todayReadiness.score) : null;
@@ -173,12 +175,23 @@ export default function TodayView() {
       {/* Weekly summary card */}
       <WeeklySummary />
 
-      <button
-        onClick={() => navigate(`/workout/${weekNumber}/${dayIndex}`)}
-        className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg active:bg-emerald-700"
-      >
-        {logged ? 'View Workout' : 'Start Workout'}
-      </button>
+      {/* AI Coach */}
+      {showCoach && <WorkoutCoach onClose={() => setShowCoach(false)} />}
+
+      <div className="flex gap-3">
+        <button
+          onClick={() => setShowCoach(true)}
+          className="py-4 px-4 bg-slate-800 text-slate-300 rounded-xl font-semibold text-sm active:bg-slate-700 border border-slate-700"
+        >
+          &#x1F3CB; Coach
+        </button>
+        <button
+          onClick={() => navigate(`/workout/${weekNumber}/${dayIndex}`)}
+          className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg active:bg-emerald-700"
+        >
+          {logged ? 'View Workout' : 'Start Workout'}
+        </button>
+      </div>
     </div>
   );
 }

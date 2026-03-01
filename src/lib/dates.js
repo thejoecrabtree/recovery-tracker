@@ -1,17 +1,34 @@
+// Helper: 0=Mon, 1=Tue, ..., 6=Sun
+function dayOfWeek(date) {
+  return (date.getDay() + 6) % 7;
+}
+
+// Helper: get midnight Monday of the week containing `date`
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - dayOfWeek(d));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export function getProgramDay(startDate, today = new Date()) {
   if (!startDate) return null;
 
   const start = new Date(startDate + 'T00:00:00');
   const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const diffMs = now - start;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) {
-    return { started: false, daysUntilStart: -diffDays, weekNumber: 0, dayIndex: 0 };
+  if (now < start) {
+    const daysUntilStart = Math.round((start - now) / (1000 * 60 * 60 * 24));
+    return { started: false, daysUntilStart, weekNumber: 0, dayIndex: 0 };
   }
 
+  // Actual day of week (0=Mon ... 6=Sun)
+  const dayIndex = dayOfWeek(now);
+
+  // Week number anchored to Monday of start week
+  const startMonday = getMondayOfWeek(start);
+  const diffDays = Math.round((now - startMonday) / (1000 * 60 * 60 * 24));
   const weekNumber = Math.floor(diffDays / 7) + 1;
-  const dayIndex = diffDays % 7; // 0=Mon, 1=Tue, ..., 6=Sun
 
   if (weekNumber > 12) {
     return { finished: true, weekNumber, dayIndex };
@@ -37,10 +54,24 @@ export function dateFromISO(str) {
 
 export function getDateForProgramDay(startDate, weekNumber, dayIndex) {
   const start = new Date(startDate + 'T00:00:00');
-  const dayOffset = (weekNumber - 1) * 7 + dayIndex;
-  const d = new Date(start);
-  d.setDate(d.getDate() + dayOffset);
+  const startMonday = getMondayOfWeek(start);
+  const d = new Date(startMonday);
+  d.setDate(d.getDate() + (weekNumber - 1) * 7 + dayIndex);
   return d;
+}
+
+// Get { weekNumber, dayIndex } for any calendar date, or null if outside program
+export function getProgramDayForDate(startDate, date) {
+  const start = new Date(startDate + 'T00:00:00');
+  if (date < start) return null;
+
+  const dayIndex = dayOfWeek(date);
+  const startMonday = getMondayOfWeek(start);
+  const diffDays = Math.round((date - startMonday) / (1000 * 60 * 60 * 24));
+  const weekNumber = Math.floor(diffDays / 7) + 1;
+
+  if (weekNumber < 1 || weekNumber > 12) return null;
+  return { weekNumber, dayIndex };
 }
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

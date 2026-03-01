@@ -100,6 +100,17 @@ export default function StrengthLogger({ section, weekNumber, readinessMods, onC
         />
       )}
 
+      {/* Column headers */}
+      <div className="flex items-center gap-2 px-3 pb-1">
+        <span className="w-8 text-[10px] text-slate-600 text-center">Set</span>
+        <div className="flex-1 flex items-center gap-2">
+          <span className="w-16 text-[10px] text-slate-600 text-center">Weight</span>
+          <span className="text-transparent text-[10px]">x</span>
+          <span className="w-12 text-[10px] text-slate-600 text-center">Reps</span>
+        </div>
+        <span className="text-[10px] text-slate-600 w-10 text-right">%1RM</span>
+      </div>
+
       <div className="space-y-2">
         {loggedSets.map((s, i) => (
           <div key={i}>
@@ -124,7 +135,6 @@ export default function StrengthLogger({ section, weekNumber, readinessMods, onC
                     value={dw(s.actualWeight)}
                     onChange={e => {
                       const val = Number(e.target.value);
-                      // Convert back to kg for internal storage
                       updateSet(i, 'actualWeight', unit === 'lbs' ? val / 2.20462 : val);
                     }}
                     className="w-16 bg-slate-700 text-center text-sm font-mono rounded-lg py-1.5 text-slate-100"
@@ -146,8 +156,9 @@ export default function StrengthLogger({ section, weekNumber, readinessMods, onC
               </span>
             </div>
 
-            {/* Inline plate chips — updates live with weight */}
-            <div className="mt-1 ml-11">
+            {/* Target hint + plate chips */}
+            <div className="mt-1 ml-11 flex items-center gap-2">
+              <span className="text-[9px] text-slate-600">target {dw(s.targetWeight)}{ul}</span>
               <PlateChips
                 weight={dw(s.actualWeight)}
                 unit={unit}

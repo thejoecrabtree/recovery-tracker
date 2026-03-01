@@ -113,7 +113,28 @@ export default function WhoopReadiness() {
     } catch (err) {
       console.error('[Whoop] fetch error:', err);
       if (err.message === 'UNAUTHORIZED') {
-        setError('Session expired — reconnect Whoop in Settings');
+        // Try one more refresh before giving up
+        try {
+          const refreshed = await refreshAccessToken(data.whoop.refreshToken);
+          if (refreshed.access_token) {
+            update(prev => ({
+              ...prev,
+              whoop: {
+                ...prev.whoop,
+                accessToken: refreshed.access_token,
+                refreshToken: refreshed.refresh_token || prev.whoop.refreshToken,
+                expiresAt: Date.now() + (refreshed.expires_in || 3600) * 1000,
+              },
+            }));
+            // Retry the fetch with new token
+            setLoading(false);
+            setTimeout(fetchWhoopData, 500);
+            return;
+          }
+        } catch {
+          // Refresh truly failed
+        }
+        setError('Whoop session expired. Go to Settings to reconnect.');
       } else {
         setError(err.message || 'Unknown error');
       }
@@ -158,8 +179,14 @@ export default function WhoopReadiness() {
       </div>
 
       {error && (
-        <div className="px-4 py-2">
-          <p className="text-xs text-red-400">{error}</p>
+        <div className="px-4 py-2 flex items-center gap-2">
+          <p className="text-xs text-red-400 flex-1">{error}</p>
+          <button
+            onClick={fetchWhoopData}
+            className="text-[10px] text-emerald-500 font-semibold active:text-emerald-300 shrink-0"
+          >
+            Retry
+          </button>
         </div>
       )}
 

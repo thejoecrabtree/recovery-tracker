@@ -1,16 +1,18 @@
-// Cloudflare Worker — Whoop OAuth + API Proxy
-// Handles token exchange, refresh, AND proxies Whoop API calls
-// so the browser never talks to api.prod.whoop.com directly (CORS).
+// Cloudflare Worker — Whoop OAuth + API Proxy + AI Coach
+// Handles token exchange, refresh, proxies Whoop API calls,
+// and AI Coach requests to Claude API.
 //
 // Deploy:
 //   cd workers/whoop-proxy
 //   npx wrangler login
 //   npx wrangler secret put WHOOP_CLIENT_SECRET
+//   npx wrangler secret put ANTHROPIC_API_KEY
 //   npx wrangler deploy
 //
 // Environment variables (set via wrangler.toml or `wrangler secret`):
 //   WHOOP_CLIENT_ID     — Whoop OAuth client ID
 //   WHOOP_CLIENT_SECRET — Whoop OAuth client secret (use `wrangler secret put`)
+//   ANTHROPIC_API_KEY   — Anthropic API key for AI Coach (use `wrangler secret put`)
 //   ALLOWED_ORIGIN      — Your app's origin for CORS
 
 const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
@@ -66,6 +68,11 @@ export default {
       // API proxy (GET /api/v2/...) — proxies to Whoop developer API
       if (path.startsWith('/api/') && request.method === 'GET') {
         return await handleApiProxy(request, url, origin, allowedOrigin);
+      }
+
+      // AI Coach (POST /ai) — proxies to Claude API
+      if (path === '/ai' && request.method === 'POST') {
+        return await handleAiCoach(request, env, origin, allowedOrigin);
       }
 
       return jsonResponse({ error: 'Not found' }, 404, origin, allowedOrigin);
@@ -190,4 +197,98 @@ async function handleTokenRefresh(request, env, origin, allowedOrigin) {
   }
 
   return jsonResponse(data, 200, origin, allowedOrigin);
+}
+
+/**
+ * POST /ai — AI Coach via Claude API
+ * Body: { message, context }
+ * context: { week, day, dayLabel, readiness, lifts, workout }
+ */
+async function handleAiCoach(request, env, origin, allowedOrigin) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonResponse(
+      { error: 'AI Coach not configured. Add ANTHROPIC_API_KEY as a Worker secret.' },
+      503,
+      origin,
+      allowedOrigin,
+    );
+  }
+
+  const body = await request.json();
+  const { message, context } = body;
+
+  if (!message) {
+    return jsonResponse({ error: 'Missing message' }, 400, origin, allowedOrigin);
+  }
+
+  const systemPrompt = `You are a concise AI fitness coach for a 12-week progressive overload program (CrossFit/HYROX style, modified for 5th metatarsal recovery).
+
+CURRENT STATE:
+- Week ${context?.week || '?'}/12, ${context?.day || 'Unknown day'}
+- Workout: ${context?.dayLabel || 'Unknown'}
+- Readiness: ${context?.readiness || 'Not set'}
+${context?.lifts ? `\nCURRENT 1RMs (kg):\n${context.lifts}` : ''}
+${context?.workout ? `\nTODAY'S SECTIONS:\n${context.workout}` : ''}
+
+You can suggest these modifications via a JSON block:
+\`\`\`json
+{"actions": [
+  {"type": "adjust_1rm", "lift": "backSquat|deadlift|bench|pushPress|hipThrust|powerClean|snatch", "delta_kg": -2.5},
+  {"type": "add_note", "date": "YYYY-MM-DD", "text": "Extra exercises or instructions"}
+]}
+\`\`\`
+
+Rules:
+- Keep responses under 80 words
+- Be direct and practical
+- Only include the JSON block if the user requests a specific change
+- Weight deltas in kg (2.5kg increments)
+- For "add more X exercises", use add_note with specific exercises and sets/reps`;
+
+  try {
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: message }],
+      }),
+    });
+
+    if (!claudeRes.ok) {
+      const err = await claudeRes.text().catch(() => '');
+      console.error('Claude API error:', claudeRes.status, err);
+      return jsonResponse(
+        { error: `AI service error (${claudeRes.status})` },
+        claudeRes.status,
+        origin,
+        allowedOrigin,
+      );
+    }
+
+    const claudeData = await claudeRes.json();
+    const text = claudeData.content?.[0]?.text || '';
+
+    let actions = null;
+    const jsonMatch = text.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        actions = parsed.actions || null;
+      } catch { /* ignore malformed JSON */ }
+    }
+
+    const responseText = text.replace(/```json[\s\S]*?```/g, '').trim();
+
+    return jsonResponse({ response: responseText, actions }, 200, origin, allowedOrigin);
+  } catch (err) {
+    console.error('AI Coach error:', err);
+    return jsonResponse({ error: 'Failed to get AI response' }, 500, origin, allowedOrigin);
+  }
 }

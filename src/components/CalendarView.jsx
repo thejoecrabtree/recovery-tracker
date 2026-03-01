@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { PROGRAM } from '../data/program';
-import { toISODate, dateFromISO, getDateForProgramDay, dayName } from '../lib/dates';
+import { toISODate, dateFromISO, getDateForProgramDay, getProgramDayForDate, dayName } from '../lib/dates';
 import { getWorkoutModifications } from '../lib/readiness';
 
 export default function CalendarView() {
@@ -37,16 +37,12 @@ export default function CalendarView() {
     if (data.workoutLogs[iso]) return 'completed';
 
     if (!data.startDate) return 'none';
-    const start = dateFromISO(data.startDate);
-    const diffMs = date - start;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0 || diffDays >= 84) return 'none';
+    const prog = getProgramDayForDate(data.startDate, date);
+    if (!prog) return 'none';
 
-    const weekNumber = Math.floor(diffDays / 7) + 1;
-    const dayIndex = diffDays % 7;
-    const weekData = PROGRAM.weeks[weekNumber - 1];
-    const dayData = weekData?.days?.[dayIndex];
+    const weekData = PROGRAM.weeks[prog.weekNumber - 1];
+    const dayData = weekData?.days?.[prog.dayIndex];
 
     if (!dayData || dayData.isRestDay) return 'rest';
 
@@ -59,20 +55,15 @@ export default function CalendarView() {
   const getSelectedInfo = () => {
     if (!selectedDate || !data.startDate) return null;
 
-    const start = dateFromISO(data.startDate);
-    const diffMs = selectedDate - start;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const prog = getProgramDayForDate(data.startDate, selectedDate);
+    if (!prog) return null;
 
-    if (diffDays < 0 || diffDays >= 84) return null;
-
-    const weekNumber = Math.floor(diffDays / 7) + 1;
-    const dayIndex = diffDays % 7;
-    const weekData = PROGRAM.weeks[weekNumber - 1];
-    const dayData = weekData?.days?.[dayIndex];
+    const weekData = PROGRAM.weeks[prog.weekNumber - 1];
+    const dayData = weekData?.days?.[prog.dayIndex];
     const iso = toISODate(selectedDate);
     const log = data.workoutLogs[iso];
 
-    return { weekNumber, dayIndex, dayData, log, iso };
+    return { weekNumber: prog.weekNumber, dayIndex: prog.dayIndex, dayData, log, iso };
   };
 
   const selectedInfo = getSelectedInfo();

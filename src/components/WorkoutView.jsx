@@ -48,6 +48,7 @@ export default function WorkoutView() {
   const [adjustmentMessages, setAdjustmentMessages] = useState([]);
   const [newPRs, setNewPRs] = useState([]);
   const [showNotes, setShowNotes] = useState(false);
+  const [workoutLogged, setWorkoutLogged] = useState(false);
 
   if (!dayData || dayData.isRestDay) {
     return (
@@ -159,8 +160,71 @@ export default function WorkoutView() {
         ? { ...prev.workoutNotes, [dateISO]: notes }
         : prev.workoutNotes,
     }));
-    navigate('/');
+    setWorkoutLogged(true);
   };
+
+  // Workout logged celebration screen
+  if (workoutLogged) {
+    const strengthSections = Object.values(sectionData).filter(s => s?.liftKey);
+    const totalSets = strengthSections.reduce((sum, s) => sum + (s.sets?.length || 0), 0);
+    const totalVolume = strengthSections.reduce((sum, s) =>
+      sum + (s.sets || []).reduce((v, set) => v + set.weight * set.reps, 0), 0);
+
+    return (
+      <div className="p-6 text-center mt-12 space-y-6">
+        <div className="text-6xl">&#x1F4AA;</div>
+        <div>
+          <h1 className="text-2xl font-bold text-emerald-400">Workout Logged!</h1>
+          <p className="text-sm text-slate-500 mt-1">Week {weekNumber} — {dayName(dayIndex)}</p>
+          <p className="text-sm text-slate-400">{dayData.label}</p>
+        </div>
+
+        {/* Summary stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <p className="text-lg font-bold text-slate-100">{completedCount}</p>
+            <p className="text-[10px] text-slate-500">Sections</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <p className="text-lg font-bold text-slate-100">{totalSets}</p>
+            <p className="text-[10px] text-slate-500">Sets</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <p className="text-lg font-bold text-slate-100">{totalVolume > 0 ? `${dw(totalVolume)}` : '--'}</p>
+            <p className="text-[10px] text-slate-500">Volume ({ul})</p>
+          </div>
+        </div>
+
+        {/* PRs */}
+        {newPRs.length > 0 && (
+          <div className="bg-amber-950/30 border border-amber-800/30 rounded-xl p-4 space-y-2">
+            <p className="text-sm font-bold text-amber-400">New PRs!</p>
+            {newPRs.map((pr, i) => (
+              <p key={i} className="text-xs text-amber-300">
+                {pr.liftKey.replace(/([A-Z])/g, ' $1').trim()}: {dw(pr.weight)}{ul} x {pr.reps}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Adjustment messages */}
+        {adjustmentMessages.length > 0 && (
+          <div className="bg-blue-950/30 border border-blue-800/30 rounded-xl p-4 space-y-1">
+            {adjustmentMessages.map((msg, i) => (
+              <p key={i} className="text-xs text-blue-400">{msg}</p>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={() => navigate('/')}
+          className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg active:bg-emerald-700"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 pb-24 space-y-4">

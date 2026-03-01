@@ -2,7 +2,7 @@
 // Calculates current streak, longest streak, and weekly consistency.
 
 import { PROGRAM } from '../data/program';
-import { toISODate, dateFromISO, getDateForProgramDay } from './dates';
+import { toISODate, dateFromISO, getDateForProgramDay, getProgramDay } from './dates';
 
 /**
  * Get all scheduled (non-rest) workout dates for the program.
@@ -118,12 +118,11 @@ export function getCurrentWeekProgress(workoutLogs, startDate) {
 
   const today = new Date();
   const todayISO = toISODate(today);
-  const start = dateFromISO(startDate);
-  const diffDays = Math.floor((today - start) / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0 || diffDays >= 84) return null;
+  const prog = getProgramDay(startDate, today);
+  if (!prog?.started || prog.finished) return null;
 
-  const weekNumber = Math.floor(diffDays / 7) + 1;
+  const weekNumber = prog.weekNumber;
   const week = PROGRAM.weeks[weekNumber - 1];
   if (!week?.days) return null;
 

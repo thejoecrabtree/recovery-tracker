@@ -254,7 +254,7 @@ function StrengthDetail({ section, weekNumber, data, logData, unit, ul, dw }) {
       ) : (
         <div className="bg-slate-800/50 rounded-lg p-3">
           <p className="text-sm font-mono font-bold text-slate-100">
-            {section.sets.length} x {section.sets[0]?.reps} @ {dw(weights[0])}{ul}
+            {section.sets.length} sets x {section.sets[0]?.reps} reps @ {dw(weights[0])}{ul} per set
             <span className="text-[10px] text-slate-500 font-normal ml-2">({Math.round(section.sets[0]?.pct * 100)}%)</span>
           </p>
         </div>
